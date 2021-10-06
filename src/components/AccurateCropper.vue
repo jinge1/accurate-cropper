@@ -7,10 +7,10 @@
       <div class="controls">
         <div class="control-item" v-for="item in buttons" :key="item.action">
           <span class="ratio-text" v-if="item.action === 'zoomText'"
-            >{{ parseInt(zoom * 100) }}%</span
+            >{{ parseInt(imgZoom * 100) }}%</span
           >
           <span class="ratio-text" v-else-if="item.action === 'angleText'"
-            >{{ angle }}°</span
+            >{{ imgAngle }}°</span
           >
           <el-tooltip
             v-else
@@ -24,7 +24,7 @@
           >
             <i
               @click="changeAction(item.action)"
-              :class="[item.icon, mode === item.action ? 'active' : '']"
+              :class="[item.icon, actionMode === item.action ? 'active' : '']"
             ></i>
           </el-tooltip>
         </div>
@@ -61,8 +61,7 @@ export default {
     },
     // 图片地址
     src: {
-      type: String,
-      default: "",
+      type: String
     },
     // 旋转角度
     angle: {
@@ -104,7 +103,7 @@ export default {
           action: "rotateRight",
           msg: "顺时针旋转90°",
         },
-        // { action: "angleText" }, // 展示缩放值
+        { action: "angleText" }, // 展示缩放值
         {
           icon: "el-icon-refresh-left",
           action: "rotateLeft",
@@ -113,12 +112,16 @@ export default {
       ],
     },
   },
-  data() {
+  data () {
     return {
-      isInit: false, // 是否初始化
       conf: {},
-      positionInfo: {},
       canvas: null,
+      imgSrc: '',
+      imgAngle: 0,
+      imgZoom: 1,
+      actionMode: '',
+      positionInfo: {},
+      isInit: false, // 是否初始化
       cropRect: null,
       // preObjs: [],
       // 是否显示裁剪区
@@ -126,11 +129,11 @@ export default {
       pathRect: null,
     };
   },
-  mounted() {
+  mounted () {
     this.init();
   },
   methods: {
-    init() {
+    init () {
       const { config } = this;
       this.conf = { ...defaultConfig, ...config };
       this.initCanvas();
@@ -138,8 +141,7 @@ export default {
     /**
      * 初始化画布
      */
-    initCanvas() {
-      const { src } = this;
+    initCanvas () {
       this.canvas = new fabric.Canvas(this.$refs.canvas, {
         preserveObjectStacking: true, // 选中对象不会到最高层，按原层次摆放
         // centeredRotation: true, // 如果为真，则对象使用中心点作为旋转变换的原点
@@ -153,12 +155,9 @@ export default {
       });
       // 设置画布事件
       this.setCanvasEvents();
-      if (src) {
-        this.setSrc();
-      }
     },
     // 设置事件
-    setCanvasEvents() {
+    setCanvasEvents () {
       const { canvas } = this;
       let start = null;
       let moveLock = false;
@@ -170,10 +169,10 @@ export default {
         "object:moving": this.modify,
         // 鼠标滚动缩放
         "mouse:wheel": ({ e }) => {
-          const { conf, zoom } = this;
+          const { conf, imgZoom } = this;
           const { zoomStep } = conf;
           const { deltaY, offsetX, offsetY } = e;
-          let nextzoom = deltaY > 0 ? zoom - zoomStep : zoom + zoomStep;
+          let nextzoom = deltaY > 0 ? imgZoom - zoomStep : imgZoom + zoomStep;
           nextzoom = this.getCorrectZoom(nextzoom);
           this.setZoom(nextzoom, offsetX, offsetY);
         },
@@ -189,10 +188,10 @@ export default {
           }
         },
         "mouse:move": ({ e }) => {
-          const { mode, conf } = this;
+          const { actionMode, conf, isShowClip } = this;
           const { createLimit } = conf;
           const { movementX, movementY } = e;
-          if (moveLock && mode === "move") {
+          if (moveLock && actionMode === "move") {
             this.setRelativePan(movementX, movementY);
             return false;
           }
@@ -208,7 +207,10 @@ export default {
             isMove = true;
           }
           // 根据新框选，更新框选位置
-          if (isMove && mode !== "move") {
+          if (isMove && actionMode !== "move") {
+            if (!isShowClip) {
+              this.isShowClip = true
+            }
             const { disX = 0, disY = 0 } = this.getImageInfo() || {};
             const nextInfo = {
               width,
@@ -217,7 +219,6 @@ export default {
               top: Math.min(y, sY) - disY,
             };
             this.updatePosition(nextInfo);
-            this.updateClip();
           }
         },
         "mouse:up": () => {
@@ -228,7 +229,7 @@ export default {
         },
       });
     },
-    modify(flg = true) {
+    modify (flg = true) {
       // 同步当前修改内容到截图区
       const { canvas, pathRect } = this;
       const imgInfo = this.getImageInfo();
@@ -249,17 +250,17 @@ export default {
       const { left, top } = info;
       const nextInfo = { ...info, left: left - disX, top: top - disY };
       if (flg) {
-        this.updatePosition(nextInfo);
+        this.updatePosition(nextInfo, false);
       }
     },
     // 平移画布
-    setRelativePan(x, y) {
+    setRelativePan (x, y) {
       const { canvas } = this;
       const point = new fabric.Point(x, y);
       canvas.relativePan(point);
     },
     // 设置裁剪对象为选中状态
-    setActive() {
+    setActive () {
       const { canvas } = this;
       const active = canvas.getObjects().find((o) => o.objType === "active");
       if (!active) {
@@ -269,13 +270,15 @@ export default {
       canvas.renderAll();
     },
     // 更新裁剪区位置
-    updateClip() {
-      const { canvas, positionInfo } = this;
+    updateClip () {
+      const { canvas, positionInfo, isShowClip } = this;
       const active = canvas.getObjects().find((o) => o.objType === "active");
+      if (!isShowClip) {
+        return false;
+      }
       if (!active) {
         // 创建裁剪区
         this.drawClip();
-        this.isShowClip = true;
         canvas.renderAll();
         return false;
       }
@@ -285,30 +288,33 @@ export default {
       canvas.renderAll();
     },
     // 显示位置与canvas实际差异处理
-    getCanvasInfo(info) {
+    getCanvasInfo (info) {
       const { disX = 0, disY = 0 } = this.getImageInfo() || {};
       const { left, top, ...other } = info;
       return { ...other, left: left + disX, top: top + disY };
     },
     // 更新位置信息
-    updatePosition(info) {
+    updatePosition (info, flg = true) {
       this.positionInfo = info;
-      // console.log(info, "info");
       this.$emit("update:position", info);
+      if (flg) {
+        this.updateClip();
+      }
     },
     /**
      * 控制栏按钮操作
      */
-    changeAction(type) {
+    changeAction (type) {
       // 放大缩小
       if (["zoomOut", "zoomIn"].includes(type)) {
         this.changeZoom(type === "zoomOut" ? -1 : 1);
       }
       // 整体移动与操作裁剪区类型切换
       if (["move", "crop"].includes(type)) {
-        const { mode } = this;
-        if (mode !== type) {
-          const nextMode = mode === "move" ? "crop" : "move";
+        const { actionMode } = this;
+        if (actionMode !== type) {
+          const nextMode = actionMode === "move" ? "crop" : "move";
+          this.actionMode = nextMode
           this.$emit("update:mode", nextMode);
         }
       }
@@ -325,11 +331,11 @@ export default {
      * 修改缩放比例
      * flg 1 放大，2 缩小
      */
-    changeZoom(flg = 1) {
-      const { conf, zoom } = this;
+    changeZoom (flg = 1) {
+      const { conf, imgZoom } = this;
       const { zoomStep, minZoom, maxZoom } = conf;
       // 解决精度问题
-      let nextZoom = Number.parseFloat((zoom + zoomStep * flg).toPrecision(6));
+      let nextZoom = Number.parseFloat((imgZoom + zoomStep * flg).toPrecision(6));
 
       if (flg === 1 && nextZoom > maxZoom) {
         nextZoom = maxZoom;
@@ -345,38 +351,33 @@ export default {
      * 旋转背景图
      * flg 1 顺时针旋转90°，-1 逆时针旋转90°
      */
-    rotate(flg = 1) {
-      const { angle } = this;
-      const nextAngle = this.getCorrectAngle(angle + 90 * flg);
-      this.setAngle(nextAngle);
-      // 具体旋转事件在watch中触发
-      this.$emit("update:angle", nextAngle);
-      // this.updateAnglePosition(flg);
+    rotate (flg = 1) {
+      const { imgAngle } = this;
+      const nextAngle = imgAngle + 90 * flg
+      this.updateAnglePosition(flg)
+      this.setAngle(nextAngle)
     },
     /**
      * 旋转角度后更新裁剪框位置，视觉上在同步旋转
-     * flg 1 顺时针旋转90°，-1 逆时针旋转90°
-     * 待完善
      */
-    // updateAnglePosition(flg) {
-    //   const { positionInfo } = this;
-    //   const { left, top, width, height } = positionInfo;
-    //   // const nextInfo = { ...positionInfo, width: height, height: width };
-    //   const nextInfo = {
-    //     ...positionInfo,
-    //     left: 0,
-    //     top: left,
-    //     width: height,
-    //     height: width,
-    //   };
-    //   // console.log(nextInfo, "nextInfo---");
-    //   this.updatePosition(nextInfo);
-    //   this.updateClip();
-    // },
+    updateAnglePosition () {
+      const { positionInfo } = this;
+      const { height: imgHeight } = this.getImageInfo();
+      const { left, top, width, height } = positionInfo;
+      const nextInfo = {
+        ...positionInfo,
+        left: imgHeight - (top + height),
+        top: left,
+        width: height,
+        height: width,
+      };
+      // console.log(nextInfo, "nextInfo---");
+      this.updatePosition(nextInfo);
+    },
     /**
      * 获取正确的角度值
      */
-    getCorrectAngle(angle) {
+    getCorrectAngle (angle) {
       if (angle < 0) {
         return 360 + angle;
       }
@@ -385,8 +386,9 @@ export default {
       }
       return angle;
     },
-    setZoom(zoom, x, y) {
+    setZoom (zoom, x, y) {
       const { canvas } = this;
+      this.imgZoom = zoom
       this.$emit("update:zoom", zoom);
       const pointX = typeof x === "undefined" ? canvas.getWidth() / 2 : x;
       const pointY = typeof y === "undefined" ? canvas.getHeight() / 2 : y;
@@ -395,29 +397,34 @@ export default {
       // const point = new fabric.Point(x, y);
       // canvas.relativePan(point);
     },
-    setAngle(angle) {
-      const { canvas, isShowClip } = this;
+    setAngle (angle) {
+      const { canvas, isShowClip, imgAngle } = this;
+      const correctAngle = this.getCorrectAngle(angle);
+      if (imgAngle !== correctAngle) {
+        this.imgAngle = correctAngle
+        this.$emit("update:angle", correctAngle);
+      }
+      if (!canvas) {
+        return false;
+      }
       const img = canvas.getObjects().find((o) => o.get("type") === "image");
       if (img) {
         img.rotate(angle);
-        canvas.renderAll();
       }
       if (isShowClip) {
-        // 清除并重绘裁剪区
-        this.clearClip(false);
+        // 创建裁剪区
         this.drawClip();
       }
-      canvas.renderAll();
+      canvas.renderAll()
     },
     /**
      * 切换图片时的处理
      */
-    async setSrc() {
+    async setSrc () {
       const {
         canvas,
-        src,
+        imgSrc,
         isAutoViewport,
-        isShowClip,
         positionInfo,
         position,
       } = this;
@@ -427,13 +434,13 @@ export default {
       // 记录本次修改前信息
       // this.preObjs = canvas.getObjects();
 
-      // 清除画布
-      canvas.clear();
-      if (!src) {
+      // 清除画布内容
+      this.removeObj()
+      if (!imgSrc) {
         return false;
       }
       // 绘制图片
-      const img = await this.getFabricImage(src);
+      const img = await this.getFabricImage(imgSrc);
       this.drawImg(img);
 
       // 图片按比例自动缩放及视觉居中
@@ -446,29 +453,41 @@ export default {
       if (Object.keys(positionInfo).length === 0) {
         const defaultInfo = this.getDefaultPosition();
         const info = { ...defaultInfo, ...position };
+        // 设置截图位置及绘制截图区域
         this.updatePosition(info);
-      }
-
-      // 绘制遮罩
-      if (isShowClip) {
-        this.drawClip();
       }
       canvas.renderAll();
     },
-    // 绘制遮罩内容（info为重新创建信息，默认无）
-    drawClip() {
-      const { canvas, conf, positionInfo } = this;
-      const { fill } = conf;
-      const imgInfo = this.getImageInfo();
-      if (canvas && !imgInfo) {
+    /**
+     * 删除对象(types为空数组则全部删除)
+     */
+    removeObj (types = []) {
+      const { canvas } = this
+      if (!canvas) {
         return false;
       }
-      // 已有则先清除
       canvas.getObjects().forEach((o) => {
-        if (["bg", "active"].includes(o.objType)) {
+        if (types.length === 0 || types.includes(o.objType)) {
           canvas.remove(o);
         }
-      });
+      })
+      canvas.renderAll();
+    },
+    // 绘制遮罩内容（info为重新创建信息，默认无）
+    drawClip () {
+      const { canvas, conf, positionInfo, isShowClip } = this;
+      const { fill } = conf;
+      const imgInfo = this.getImageInfo();
+      if (!canvas || !imgInfo) {
+        return false;
+      }
+      // 清除已有对象
+      this.removeObj(["bg", "active"])
+
+      if (!isShowClip) {
+        return false
+      }
+
       const { width, height, disX, disY } = imgInfo;
 
       // 遮罩层
@@ -513,29 +532,27 @@ export default {
       activeRect.setControlsVisibility({
         mtr: false, // 禁用旋转
       });
+
       canvas.add(activeRect);
       // 设置为选中状态
       this.setActive();
+      canvas.renderAll();
     },
     // 绘制底图
-    drawImg(img) {
-      const { canvas, angle } = this;
-      // 已有则先清除
-      canvas.getObjects().forEach((o) => {
-        if (o.get("type") === "image") {
-          canvas.remove(o);
-        }
-      });
+    drawImg (img) {
+      const { canvas, imgAngle } = this;
+      // 先清除原有图片
+      this.removeObj(['img'])
       img.set({
         evented: false, // 禁用对象事件
         selectable: false, // 对象是否可选择
         objType: "img",
       });
-      img.rotate(angle);
+      img.rotate(imgAngle);
       canvas.add(img);
     },
     // 居中视图
-    setViewport() {
+    setViewport () {
       const { canvas } = this;
       const imgInfo = this.getImageInfo();
       if (!imgInfo) {
@@ -545,11 +562,13 @@ export default {
       const { width: boxWidth, height: boxHeight } = this.getBoxSize();
       // 获取初始缩放比例（若图片尺寸超出canvas，则在横向或纵向与canvas保持一直；否则100%显示）
       const zoom = Math.min(boxWidth / width, boxHeight / height, 1);
-      const zoomPoint = new fabric.Point(0, 0);
+      // const zoomPoint = new fabric.Point(0, 0);
 
       // 同步初始缩放比例
-      this.$emit("update:zoom", zoom);
-      canvas.zoomToPoint(zoomPoint, zoom);
+      // this.$emit("update:zoom", zoom);
+      // canvas.zoomToPoint(zoomPoint, zoom);
+      // this.imgZoom = zoom
+      this.setZoom(zoom, 0, 0)
 
       // 原始中心点
       const lCenter = (boxWidth - width * zoom) / 2;
@@ -571,10 +590,6 @@ export default {
         // 居中
         l = lCenter + l;
         t = tCenter + t;
-
-        // // 存储偏移数据
-        // this.disX = disX;
-        // this.disY = disY;
       }
       // x, y 若不为0， 则已经发生过位移，需矫正
       const x = canvas.viewportTransform[4];
@@ -582,8 +597,8 @@ export default {
       canvas.relativePan(new fabric.Point(l - x, t - y));
     },
     // 根据角度获取图片宽高信息
-    getImageInfo() {
-      const { canvas, angle } = this;
+    getImageInfo () {
+      const { canvas, imgAngle } = this;
       if (!canvas) {
         return null;
       }
@@ -593,7 +608,7 @@ export default {
       }
       const { width, height } = img;
       // 旋转角度是否为垂直方向
-      const isVertical = Math.round(angle / 90) % 2 === 1;
+      const isVertical = Math.round(imgAngle / 90) % 2 === 1;
       const w = isVertical ? height : width;
       const h = isVertical ? width : height;
       const disX = isVertical ? width / 2 - height / 2 : 0;
@@ -607,7 +622,7 @@ export default {
       };
     },
     // 获取默认截图区
-    getDefaultPosition() {
+    getDefaultPosition () {
       const { width, height } = this.getImageInfo();
       const ratio = 0.1;
       // 默认选区
@@ -619,7 +634,7 @@ export default {
       };
     },
     // 获取fabric图片
-    getFabricImage(src) {
+    getFabricImage (src) {
       return new Promise((resolve, reject) => {
         fabric.Image.fromURL(src, (img) => {
           resolve(img);
@@ -627,28 +642,23 @@ export default {
       });
     },
     // 清除裁剪区
-    clearClip(flg = true) {
+    clearClip () {
       const { canvas } = this;
-      canvas.getObjects().forEach((o) => {
-        if (o.get("type") !== "image") {
-          canvas.remove(o);
-        }
-      });
+      this.removeObj(["bg", "active"])
       // 清除背景色
       canvas.set({
         backgroundColor: "rgba(255,255,255, 0)",
       });
-      if (flg) {
-        this.updatePosition({});
-        this.isShowClip = false;
-      }
+      canvas.renderAll()
+      this.isShowClip = false;
+      this.updatePosition({});
     },
     /**
      * 获取正确放大倍数或判断放大倍数是否合法
      * zoom 缩放值
      * type 1 返回正确缩放比例 2 放回设置值是否正确
      */
-    getCorrectZoom(zoom, type = 1) {
+    getCorrectZoom (zoom, type = 1) {
       const { conf } = this;
       const { minZoom, maxZoom } = conf;
       let flg = true;
@@ -670,54 +680,78 @@ export default {
     /**
      * 数字精度处理
      */
-    round(num, n = 6) {
+    round (num, n = 6) {
       return Number.parseFloat(num.toPrecision(n));
     },
     // 设置canvas尺寸为父级尺寸
-    setCanvasSize() {
+    setCanvasSize () {
       const { canvas } = this;
       const { width, height } = this.getBoxSize();
       canvas.setWidth(width);
       canvas.setHeight(height);
     },
     // 获取canvas父级尺寸
-    getBoxSize() {
+    getBoxSize () {
       const { offsetWidth, offsetHeight } = this.$refs.content;
       return { width: offsetWidth, height: offsetHeight };
     },
-    clear() {
+    clear () {
       const { canvas } = this;
       canvas.clear();
     },
   },
   watch: {
     // 监听图片地址
-    src() {
-      this.setSrc();
+    src: {
+      handler (v) {
+        const { imgSrc } = this
+        if (imgSrc !== v) {
+          this.imgSrc = v
+          this.setSrc()
+        }
+      },
+      immediate: true
     },
     // 监听角度
-    angle(curr, pre) {
-      // 转换为正确的值
-      const correctAngle = this.getCorrectAngle(curr);
-      // 设置角度值有误，重新设置
-      if (correctAngle !== curr) {
-        this.$emit("update:angle", correctAngle);
-        return false;
-      }
-      // 新旧值对比，避免死循环
-      if (correctAngle !== pre) {
-        this.setAngle(curr);
-      }
+    angle: {
+      handler (v) {
+        const { imgAngle } = this
+        if (imgAngle !== v) {
+          this.setAngle(v)
+        }
+      },
+      immediate: true
+    },
+    zoom: {
+      handler (v) {
+        const { imgZoom } = this
+        if (imgZoom !== v) {
+          this.setZoom(v)
+        }
+      },
+      immediate: true
     },
     // 监听位置信息
-    position(curr = {}) {
-      const { positionInfo } = this;
-      const keys = Object.keys(curr);
-      if (keys.length > 0 && keys.some((c) => curr[c] !== positionInfo[c])) {
-        const defaultScaleInfo = { scaleX: 1, scaleY: 1 };
-        this.updatePosition({ ...defaultScaleInfo, ...curr });
-        this.updateClip();
-      }
+    position: {
+      handler (v = {}) {
+        const { positionInfo } = this;
+        const keys = Object.keys(v);
+        if (keys.length > 0 && keys.some((c) => v[c] !== positionInfo[c])) {
+          const defaultScaleInfo = { scaleX: 1, scaleY: 1 };
+          this.updatePosition({ ...defaultScaleInfo, ...v });
+        }
+      },
+      immediate: true
+    },
+    // 监听图片地址
+    mode: {
+      handler (v) {
+        const { actionMode } = this
+        if (actionMode !== v) {
+          this.actionMode = v
+        }
+      },
+      immediate: true
     },
   },
 };
@@ -754,12 +788,6 @@ export default {
   align-content: center;
   padding: 14px 0;
   font-size: 20px;
-  /* ::v-deep {
-    [class*="el-icon-"] {
-      font-size: 20px;
-      margin-right: 10px;
-    }
-  } */
   .control-item {
     margin-right: 20px;
     cursor: pointer;
@@ -784,6 +812,7 @@ export default {
 .content {
   flex: 1;
   overflow: hidden;
-  background: url("~@/assets/image/cropper.png") left top repeat;
+  background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC')
+    left top repeat;
 }
 </style>
