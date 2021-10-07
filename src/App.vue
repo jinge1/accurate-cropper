@@ -1,9 +1,9 @@
 <template>
   <div class="container">
     <div class="aside">
-      <p>aside</p>
+      <p @click="getClip">aside</p>
       <p>
-        {{ position }}
+        {{ zoom }}
       </p>
     </div>
     <div class="main">
@@ -11,6 +11,8 @@
         :src="src"
         :zoom.sync="zoom"
         :position.sync="position"
+        :isAutoViewport="false"
+        ref="cropper"
       ></AccurateCropper>
     </div>
   </div>
@@ -19,6 +21,7 @@
 <script>
 import AccurateCropper from './components/AccurateCropper.vue'
 import girl from './assets/girl.jpeg'
+// 模拟接口请求延迟
 const sleep = (delay = 500) => new Promise((resolve) => setTimeout(() => resolve(), delay))
 export default {
   components: {
@@ -40,6 +43,10 @@ export default {
       this.src = girl
       this.zoom = 1.5
       this.position = { left: 281, top: 389, width: 68, height: 345 }
+    },
+    async getClip(){
+      const src = await this.$refs.cropper.getClipImg()
+      console.log(src)
     }
   }
 }
@@ -62,5 +69,6 @@ body {
 }
 .main {
   flex: 1;
+  overflow: hidden;
 }
 </style>

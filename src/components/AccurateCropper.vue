@@ -50,6 +50,7 @@ const defaultConfig = {
   createLimit: 10,
 };
 
+// 更新字段
 const updateKeys = ["width", "height", "left", "top", "scaleX", "scaleY"];
 
 export default {
@@ -73,7 +74,7 @@ export default {
       type: Number,
       default: 1,
     },
-    // 操作类型 move 整体移动 crop 操作裁剪区
+    // 操作类型 move: 整体移动, crop: 操作裁剪区
     mode: {
       type: String,
       default: "crop",
@@ -96,7 +97,7 @@ export default {
         { action: "zoomText" }, // 展示缩放值
         { icon: "el-icon-zoom-in", action: "zoomIn" }, // 放大
         { icon: "el-icon-lock", action: "move", msg: "整体移动" }, // 整体移动
-        { icon: "el-icon-full-screen", action: "crop", msg: "框选识别区" }, // 设置裁剪区
+        { icon: "el-icon-full-screen", action: "crop", msg: "框选裁剪区" }, // 设置裁剪区
         { icon: "el-icon-delete", action: "delete", msg: "清除识别区" }, // 清除识别区
         {
           icon: "el-icon-refresh-right",
@@ -121,9 +122,8 @@ export default {
       imgZoom: 1,
       actionMode: '',
       positionInfo: {},
-      isInit: false, // 是否初始化
+      isAuto: true,
       cropRect: null,
-      // preObjs: [],
       // 是否显示裁剪区
       isShowClip: true,
       pathRect: null,
@@ -148,7 +148,7 @@ export default {
         // centeredScaling: true, // 当为真时，对象使用中心点作为比例变换的起点
         uniformScaling: false, // 是否锁定比例缩放
       });
-      this.setCanvasSize();
+      this.setCanvasSize(false);
       window.addEventListener("resize", this.setCanvasSize);
       this.$once("hook:beforeDestroy", () => {
         window.removeEventListener("resize", this.setCanvasSize);
@@ -272,10 +272,10 @@ export default {
     // 更新裁剪区位置
     updateClip () {
       const { canvas, positionInfo, isShowClip } = this;
-      const active = canvas.getObjects().find((o) => o.objType === "active");
-      if (!isShowClip) {
+      if (!isShowClip || !canvas) {
         return false;
       }
+      const active = canvas.getObjects().find((o) => o.objType === "active");
       if (!active) {
         // 创建裁剪区
         this.drawClip();
@@ -371,7 +371,6 @@ export default {
         width: height,
         height: width,
       };
-      // console.log(nextInfo, "nextInfo---");
       this.updatePosition(nextInfo);
     },
     /**
@@ -388,14 +387,15 @@ export default {
     },
     setZoom (zoom, x, y) {
       const { canvas } = this;
+      if (!canvas) {
+        return false
+      }
       this.imgZoom = zoom
       this.$emit("update:zoom", zoom);
       const pointX = typeof x === "undefined" ? canvas.getWidth() / 2 : x;
       const pointY = typeof y === "undefined" ? canvas.getHeight() / 2 : y;
       const zoomPoint = new fabric.Point(pointX, pointY);
       canvas.zoomToPoint(zoomPoint, zoom);
-      // const point = new fabric.Point(x, y);
-      // canvas.relativePan(point);
     },
     setAngle (angle) {
       const { canvas, isShowClip, imgAngle } = this;
@@ -424,15 +424,13 @@ export default {
       const {
         canvas,
         imgSrc,
-        isAutoViewport,
+        isAuto,
         positionInfo,
         position,
       } = this;
       if (!canvas) {
         return false;
       }
-      // 记录本次修改前信息
-      // this.preObjs = canvas.getObjects();
 
       // 清除画布内容
       this.removeObj()
@@ -444,8 +442,9 @@ export default {
       this.drawImg(img);
 
       // 图片按比例自动缩放及视觉居中
-      if (isAutoViewport) {
+      if (isAuto) {
         this.setViewport();
+        this.isAuto = false
         this.$emit("update:isAutoViewport", false);
       }
 
@@ -551,7 +550,7 @@ export default {
       img.rotate(imgAngle);
       canvas.add(img);
     },
-    // 居中视图
+    // 自适应缩放并居中视图
     setViewport () {
       const { canvas } = this;
       const imgInfo = this.getImageInfo();
@@ -562,12 +561,7 @@ export default {
       const { width: boxWidth, height: boxHeight } = this.getBoxSize();
       // 获取初始缩放比例（若图片尺寸超出canvas，则在横向或纵向与canvas保持一直；否则100%显示）
       const zoom = Math.min(boxWidth / width, boxHeight / height, 1);
-      // const zoomPoint = new fabric.Point(0, 0);
 
-      // 同步初始缩放比例
-      // this.$emit("update:zoom", zoom);
-      // canvas.zoomToPoint(zoomPoint, zoom);
-      // this.imgZoom = zoom
       this.setZoom(zoom, 0, 0)
 
       // 原始中心点
@@ -582,7 +576,7 @@ export default {
       if (isVertical) {
         const disX = height / 2 - width / 2;
         const disY = width / 2 - height / 2;
-        // console.log(canvas.viewportTransform, disX, disY, 1);
+
         // 左上角还原到原点
         l = -disX * zoom;
         t = -disY * zoom;
@@ -635,7 +629,7 @@ export default {
     },
     // 获取fabric图片
     getFabricImage (src) {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         fabric.Image.fromURL(src, (img) => {
           resolve(img);
         });
@@ -677,28 +671,52 @@ export default {
       }
       return type === 1 ? correct : flg;
     },
-    /**
-     * 数字精度处理
-     */
-    round (num, n = 6) {
-      return Number.parseFloat(num.toPrecision(n));
-    },
     // 设置canvas尺寸为父级尺寸
-    setCanvasSize () {
+    setCanvasSize (flg) {
       const { canvas } = this;
       const { width, height } = this.getBoxSize();
+      const w = canvas.getWidth()
+      const h = canvas.getHeight()
       canvas.setWidth(width);
       canvas.setHeight(height);
+      // 修正视觉位置
+      if (flg !== false) {
+        const p = new fabric.Point((width - w) / 2, (height - h) / 2)
+        canvas.relativePan(p)
+      }
     },
     // 获取canvas父级尺寸
     getBoxSize () {
       const { offsetWidth, offsetHeight } = this.$refs.content;
       return { width: offsetWidth, height: offsetHeight };
     },
-    clear () {
-      const { canvas } = this;
-      canvas.clear();
+    // 导出裁剪图片
+    async getClipImg () {
+      const { imgAngle, imgSrc } = this
+      // const { width, height } = this.getImageInfo();
+      const cvs = document.createElement("canvas")
+      const img = await this.loadImage(imgSrc)
+      const ctx = cvs.getContext('2d')
+      const { width, height } = img
+      ctx.save()
+      cvs.width = width
+      cvs.height = height
+      ctx.drawImage(img, 0, 0)
+      ctx.rotate(90 * (Math.PI / 180))
+      ctx.drawImage(img, 0, 0)
+      console.log(imgAngle, 'imgAngle---')
+      return cvs.toDataURL("image/png")
     },
+    // 载入图片
+    loadImage (src) {
+      return new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+          resolve(img)
+        }
+        img.src = src
+      })
+    }
   },
   watch: {
     // 监听图片地址
@@ -743,7 +761,6 @@ export default {
       },
       immediate: true
     },
-    // 监听图片地址
     mode: {
       handler (v) {
         const { actionMode } = this
@@ -753,6 +770,15 @@ export default {
       },
       immediate: true
     },
+    isAutoViewport: {
+      handler (v) {
+        const { isAuto } = this
+        if (isAuto !== v) {
+          this.isAuto = v
+        }
+      },
+      immediate: true
+    }
   },
 };
 </script>
