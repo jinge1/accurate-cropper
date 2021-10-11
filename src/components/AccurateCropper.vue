@@ -494,11 +494,13 @@ export default {
         fill,
       });
 
+      // 遮罩层禁用事件
       bgRect.set({
         evented: false,
         selectable: false,
         objType: "bg",
       });
+
       // 矫正坐标
       const exchangeInfo = this.getCanvasInfo(positionInfo);
       // 框选高亮区域
@@ -688,35 +690,23 @@ export default {
     },
     // 导出裁剪图片
     async getClipImg() {
-      const { imgAngle, imgSrc } = this;
-      // const { width, height } = this.getImageInfo();
-      const cvs = document.createElement("canvas");
-      const img = await this.loadImage(imgSrc);
-      const ctx = cvs.getContext("2d");
-      const { width, height } = img;
-      ctx.save();
-      cvs.width = width;
-      cvs.height = height;
-      ctx.drawImage(img, 0, 0);
-      ctx.rotate(90 * (Math.PI / 180));
-      ctx.drawImage(img, 0, 0);
-      console.log(imgAngle, "imgAngle---");
-      return cvs.toDataURL("image/png");
+      const { imgAngle, imgSrc, positionInfo, exportImgStr } = this;
+      const { width, height, left, top, scaleX = 1, scaleY = 1 } = positionInfo;
+      const rotateSrc = await this.getRotateImg(imgSrc, imgAngle);
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      const rotateImg = await this.loadImage(rotateSrc);
+      canvas.width = width * scaleX;
+      canvas.height = height * scaleY;
+      context.drawImage(rotateImg, -left, -top);
+      return canvas.toDataURL(exportImgStr);
     },
-    // 载入图片
-    loadImage(src) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          resolve(img);
-        };
-        img.src = src;
-      });
-    },
-    getRotateImg(img, angle) {
+    // 获取旋转后的图片
+    async getRotateImg(src, angle) {
       const { exportImgStr } = this;
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
+      const img = src instanceof Image ? src : await this.loadImage(src);
       const { width, height } = img;
       const isExchange = Math.round(angle / 90) % 2 === 1;
       const w = isExchange ? height : width;
@@ -736,6 +726,16 @@ export default {
       context.rotate((angle * Math.PI) / 180);
       context.drawImage(img, 0, 0);
       return canvas.toDataURL(exportImgStr);
+    },
+    // 载入图片
+    loadImage(src) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          resolve(img);
+        };
+        img.src = src;
+      });
     },
   },
   watch: {

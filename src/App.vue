@@ -1,17 +1,21 @@
 <template>
   <div class="container">
     <div class="aside">
-      <p @click="getClip">aside</p>
+      <p @click="getClip">
+        {{ position }}
+      </p>
       <p>
         {{ zoom }}
       </p>
+      <p v-if="clipSrc"><img :src="clipSrc" /></p>
     </div>
+
+    <!-- :isAutoViewport="false" -->
     <div class="main">
       <AccurateCropper
         :src="src"
         :zoom.sync="zoom"
         :position.sync="position"
-        :isAutoViewport="false"
         ref="cropper"
       ></AccurateCropper>
     </div>
@@ -19,40 +23,45 @@
 </template>
 
 <script>
-import AccurateCropper from './components/AccurateCropper.vue'
-import girl from './assets/girl.jpeg'
+import AccurateCropper from "./components/AccurateCropper.vue";
+import girl from "./assets/girl.jpeg";
 // 模拟接口请求延迟
-const sleep = (delay = 500) => new Promise((resolve) => setTimeout(() => resolve(), delay))
+const sleep = (delay = 500) =>
+  new Promise((resolve) => setTimeout(() => resolve(), delay));
 export default {
   components: {
-    AccurateCropper
+    AccurateCropper,
   },
-  data () {
+  data() {
     return {
-      src: '',
+      src: "",
       zoom: 1,
-      position: {}
-    }
+      position: {},
+      clipSrc: "",
+    };
   },
-  created () {
-    this.init()
+  created() {
+    this.init();
   },
   methods: {
-    async init () {
-      await sleep(1500)
-      this.src = girl
-      this.zoom = 1.5
-      this.position = { left: 281, top: 389, width: 68, height: 345 }
+    async init() {
+      await sleep(1500);
+      this.src = girl;
+      this.zoom = 1.5;
+      this.position = { left: 281, top: 389, width: 68, height: 345 };
     },
-    async getClip(){
-      const src = await this.$refs.cropper.getClipImg()
-      console.log(src)
-    }
-  }
-}
+    /**
+     * 获取裁切图片
+     */
+    async getClip() {
+      const src = await this.$refs.cropper.getClipImg();
+      this.clipSrc = src;
+    },
+  },
+};
 </script>
 
-<style>
+<style lang="postcss">
 body {
   margin: 0;
   padding: 0;
@@ -66,6 +75,9 @@ body {
   background: #d3dce6;
   color: #333;
   text-align: center;
+  img {
+    max-width: 100%;
+  }
 }
 .main {
   flex: 1;
