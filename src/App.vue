@@ -16,6 +16,8 @@
         :src="src"
         :zoom.sync="zoom"
         :position.sync="position"
+        :isAutoInit.sync="isAutoInit"
+        :isAutoPosition.sync="isAutoPosition"
         ref="cropper"
       ></AccurateCropper>
     </div>
@@ -37,6 +39,8 @@ export default {
       src: "",
       zoom: 1,
       position: {},
+      isAutoInit: true,
+      isAutoPosition: true,
       clipSrc: "",
     };
   },
@@ -46,9 +50,10 @@ export default {
   methods: {
     async init() {
       await sleep(1500);
+      this.isAutoPosition = false
+      this.position = { left: 281, top: 389, width: 68, height: 345 };
       this.src = girl;
       this.zoom = 1.5;
-      this.position = { left: 281, top: 389, width: 68, height: 345 };
     },
     /**
      * 获取裁切图片

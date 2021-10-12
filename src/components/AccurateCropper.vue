@@ -79,10 +79,15 @@ export default {
       type: String,
       default: "crop",
     },
-    // 图片切换后，是否重置可视区
-    isAutoViewport: {
+    // 是否自动适配图片大小及居中位置
+    isAutoInit: {
       type: Boolean,
       default: true, // auto 自动设置可视区，same 保持上次信息
+    },
+    // 是否自动显示截图区（初始position无效）
+    isAutoPosition: {
+      type: Boolean,
+      default: true,
     },
     // 裁剪区与信息
     position: {
@@ -113,7 +118,7 @@ export default {
       ],
     },
   },
-  data () {
+  data() {
     return {
       conf: {},
       canvas: null,
@@ -123,17 +128,18 @@ export default {
       actionMode: "",
       positionInfo: {},
       isAuto: true,
+      // autoPosition: true,
       cropRect: null,
       // 是否显示裁剪区
       isShowClip: true,
       pathRect: null,
     };
   },
-  mounted () {
+  mounted() {
     this.init();
   },
   methods: {
-    init () {
+    init() {
       const { config } = this;
       this.conf = { ...defaultConfig, ...config };
       this.initCanvas();
@@ -141,7 +147,7 @@ export default {
     /**
      * 初始化画布
      */
-    initCanvas () {
+    initCanvas() {
       this.canvas = new fabric.Canvas(this.$refs.canvas, {
         preserveObjectStacking: true, // 选中对象不会到最高层，按原层次摆放
         // centeredRotation: true, // 如果为真，则对象使用中心点作为旋转变换的原点
@@ -157,7 +163,7 @@ export default {
       this.setCanvasEvents();
     },
     // 设置事件
-    setCanvasEvents () {
+    setCanvasEvents() {
       const { canvas } = this;
       let start = null;
       let moveLock = false;
@@ -229,7 +235,7 @@ export default {
         },
       });
     },
-    modify (flg = true) {
+    modify(flg = true) {
       // 同步当前修改内容到截图区
       const { canvas, pathRect } = this;
       const imgInfo = this.getImageInfo();
@@ -254,13 +260,13 @@ export default {
       }
     },
     // 平移画布
-    setRelativePan (x, y) {
+    setRelativePan(x, y) {
       const { canvas } = this;
       const point = new fabric.Point(x, y);
       canvas.relativePan(point);
     },
     // 设置裁剪对象为选中状态
-    setActive () {
+    setActive() {
       const { canvas } = this;
       const active = canvas.getObjects().find((o) => o.objType === "active");
       if (!active) {
@@ -270,7 +276,7 @@ export default {
       canvas.renderAll();
     },
     // 更新裁剪区位置
-    updateClip () {
+    updateClip() {
       const { canvas, positionInfo, isShowClip } = this;
       if (!isShowClip || !canvas) {
         return false;
@@ -288,13 +294,13 @@ export default {
       canvas.renderAll();
     },
     // 显示位置与canvas实际差异处理
-    getCanvasInfo (info) {
+    getCanvasInfo(info) {
       const { disX = 0, disY = 0 } = this.getImageInfo() || {};
       const { left, top, ...other } = info;
       return { ...other, left: left + disX, top: top + disY };
     },
     // 更新位置信息
-    updatePosition (info, flg = true) {
+    updatePosition(info, flg = true) {
       this.positionInfo = info;
       this.$emit("update:position", info);
       if (flg) {
@@ -304,7 +310,7 @@ export default {
     /**
      * 控制栏按钮操作
      */
-    changeAction (type) {
+    changeAction(type) {
       // 放大缩小
       if (["zoomOut", "zoomIn"].includes(type)) {
         this.changeZoom(type === "zoomOut" ? -1 : 1);
@@ -331,7 +337,7 @@ export default {
      * 修改缩放比例
      * flg 1 放大，2 缩小
      */
-    changeZoom (flg = 1) {
+    changeZoom(flg = 1) {
       const { conf, imgZoom } = this;
       const { zoomStep, minZoom, maxZoom } = conf;
       // 解决精度问题
@@ -353,7 +359,7 @@ export default {
      * 旋转背景图
      * flg 1 顺时针旋转90°，-1 逆时针旋转90°
      */
-    rotate (flg = 1) {
+    rotate(flg = 1) {
       const { imgAngle } = this;
       const nextAngle = imgAngle + 90 * flg;
       this.updateAnglePosition(flg);
@@ -362,31 +368,34 @@ export default {
     /**
      * 旋转角度后更新裁剪框位置，视觉上在同步旋转
      */
-    updateAnglePosition (flg = 1) {
+    updateAnglePosition(flg = 1) {
       const { positionInfo } = this;
       const { width: imgWidth, height: imgHeight } = this.getImageInfo();
       const { left, top, width, height, scaleX = 1, scaleY = 1 } = positionInfo;
-      const leftAndTop = flg === 1 ? {
-        left: imgHeight - (top + height * scaleY),
-        top: left,
-      } : {
-        left: top,
-        top: imgWidth - (left + width * scaleX),
-      }
+      const leftAndTop =
+        flg === 1
+          ? {
+              left: imgHeight - (top + height * scaleY),
+              top: left,
+            }
+          : {
+              left: top,
+              top: imgWidth - (left + width * scaleX),
+            };
       const nextInfo = {
         ...positionInfo,
         ...leftAndTop,
         width: height,
         height: width,
         scaleX: scaleY,
-        scaleY: scaleX
+        scaleY: scaleX,
       };
       this.updatePosition(nextInfo);
     },
     /**
      * 获取正确的角度值
      */
-    getCorrectAngle (angle) {
+    getCorrectAngle(angle) {
       if (angle < 0) {
         return 360 + angle;
       }
@@ -395,7 +404,7 @@ export default {
       }
       return angle;
     },
-    setZoom (zoom, x, y) {
+    setZoom(zoom, x, y) {
       const { canvas } = this;
       if (!canvas) {
         return false;
@@ -407,7 +416,7 @@ export default {
       const zoomPoint = new fabric.Point(pointX, pointY);
       canvas.zoomToPoint(zoomPoint, zoom);
     },
-    setAngle (angle) {
+    setAngle(angle) {
       const { canvas, isShowClip, imgAngle } = this;
       const correctAngle = this.getCorrectAngle(angle);
       if (imgAngle !== correctAngle) {
@@ -430,8 +439,8 @@ export default {
     /**
      * 切换图片时的处理
      */
-    async setSrc () {
-      const { canvas, imgSrc, isAuto, positionInfo, position } = this;
+    async setSrc() {
+      const { canvas, imgSrc, isAuto, isShowClip } = this;
       if (!canvas) {
         return false;
       }
@@ -449,22 +458,30 @@ export default {
       if (isAuto) {
         this.setViewport();
         this.isAuto = false;
-        this.$emit("update:isAutoViewport", false);
+        this.$emit("update:isAutoInit", false);
       }
 
       // 设置截图位置
-      if (Object.keys(positionInfo).length === 0) {
+      if (this.autoPosition) {
         const defaultInfo = this.getDefaultPosition();
-        const info = { ...defaultInfo, ...position };
         // 设置截图位置及绘制截图区域
-        this.updatePosition(info);
+        this.updatePosition(defaultInfo);
       }
+
+      // 初始化遮罩层
+      if (isShowClip) {
+        const active = canvas.getObjects().find((o) => o.objType === "active");
+        if (!active) {
+          this.updateClip();
+        }
+      }
+
       canvas.renderAll();
     },
     /**
      * 删除对象(types为空数组则全部删除)
      */
-    removeObj (types = []) {
+    removeObj(types = []) {
       const { canvas } = this;
       if (!canvas) {
         return false;
@@ -477,7 +494,7 @@ export default {
       canvas.renderAll();
     },
     // 绘制遮罩内容（info为重新创建信息，默认无）
-    drawClip () {
+    drawClip() {
       const { canvas, conf, positionInfo, isShowClip } = this;
       const { fill } = conf;
       const imgInfo = this.getImageInfo();
@@ -544,7 +561,7 @@ export default {
       canvas.renderAll();
     },
     // 绘制底图
-    drawImg (img) {
+    drawImg(img) {
       const { canvas, imgAngle } = this;
       // 先清除原有图片
       this.removeObj(["img"]);
@@ -557,7 +574,7 @@ export default {
       canvas.add(img);
     },
     // 自适应缩放并居中视图
-    setViewport () {
+    setViewport() {
       const { canvas } = this;
       const imgInfo = this.getImageInfo();
       if (!imgInfo) {
@@ -597,7 +614,7 @@ export default {
       canvas.relativePan(new fabric.Point(l - x, t - y));
     },
     // 根据角度获取图片宽高信息
-    getImageInfo () {
+    getImageInfo() {
       const { canvas, imgAngle } = this;
       if (!canvas) {
         return null;
@@ -622,7 +639,7 @@ export default {
       };
     },
     // 获取默认截图区
-    getDefaultPosition () {
+    getDefaultPosition() {
       const { width, height } = this.getImageInfo();
       const ratio = 0.1;
       // 默认选区
@@ -634,7 +651,7 @@ export default {
       };
     },
     // 获取fabric图片
-    getFabricImage (src) {
+    getFabricImage(src) {
       return new Promise((resolve) => {
         fabric.Image.fromURL(src, (img) => {
           resolve(img);
@@ -642,7 +659,7 @@ export default {
       });
     },
     // 清除裁剪区
-    clearClip () {
+    clearClip() {
       const { canvas } = this;
       this.removeObj(["bg", "active"]);
       // 清除背景色
@@ -658,7 +675,7 @@ export default {
      * zoom 缩放值
      * type 1 返回正确缩放比例 2 放回设置值是否正确
      */
-    getCorrectZoom (zoom, type = 1) {
+    getCorrectZoom(zoom, type = 1) {
       const { conf } = this;
       const { minZoom, maxZoom } = conf;
       let flg = true;
@@ -678,7 +695,7 @@ export default {
       return type === 1 ? correct : flg;
     },
     // 设置canvas尺寸为父级尺寸
-    setCanvasSize (flg) {
+    setCanvasSize(flg) {
       const { canvas } = this;
       const { width, height } = this.getBoxSize();
       const w = canvas.getWidth();
@@ -692,12 +709,12 @@ export default {
       }
     },
     // 获取canvas父级尺寸
-    getBoxSize () {
+    getBoxSize() {
       const { offsetWidth, offsetHeight } = this.$refs.content;
       return { width: offsetWidth, height: offsetHeight };
     },
     // 导出裁剪图片
-    async getClipImg () {
+    async getClipImg() {
       const { imgAngle, imgSrc, positionInfo, exportImgStr } = this;
       const { width, height, left, top, scaleX = 1, scaleY = 1 } = positionInfo;
       const rotateSrc = await this.getRotateImg(imgSrc, imgAngle);
@@ -710,7 +727,7 @@ export default {
       return canvas.toDataURL(exportImgStr);
     },
     // 获取旋转后的图片
-    async getRotateImg (src, angle) {
+    async getRotateImg(src, angle) {
       const { exportImgStr } = this;
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
@@ -736,7 +753,7 @@ export default {
       return canvas.toDataURL(exportImgStr);
     },
     // 载入图片
-    loadImage (src) {
+    loadImage(src) {
       return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
@@ -749,7 +766,7 @@ export default {
   watch: {
     // 监听图片地址
     src: {
-      handler (v) {
+      handler(v) {
         const { imgSrc } = this;
         if (imgSrc !== v) {
           this.imgSrc = v;
@@ -760,7 +777,7 @@ export default {
     },
     // 监听角度
     angle: {
-      handler (v) {
+      handler(v) {
         const { imgAngle } = this;
         if (imgAngle !== v) {
           this.setAngle(v);
@@ -769,7 +786,7 @@ export default {
       immediate: true,
     },
     zoom: {
-      handler (v) {
+      handler(v) {
         const { imgZoom } = this;
         if (imgZoom !== v) {
           this.setZoom(v);
@@ -779,7 +796,7 @@ export default {
     },
     // 监听位置信息
     position: {
-      handler (v = {}) {
+      handler(v = {}) {
         const { positionInfo } = this;
         const keys = Object.keys(v);
         if (keys.length > 0 && keys.some((c) => v[c] !== positionInfo[c])) {
@@ -790,7 +807,7 @@ export default {
       immediate: true,
     },
     mode: {
-      handler (v) {
+      handler(v) {
         const { actionMode } = this;
         if (actionMode !== v) {
           this.actionMode = v;
@@ -798,11 +815,21 @@ export default {
       },
       immediate: true,
     },
-    isAutoViewport: {
-      handler (v) {
+    isAutoInit: {
+      handler(v) {
         const { isAuto } = this;
         if (isAuto !== v) {
           this.isAuto = v;
+        }
+      },
+      immediate: true,
+    },
+    isAutoPosition: {
+      handler(v) {
+        const { autoPosition } = this;
+        console.log(v, "v---");
+        if (autoPosition !== v) {
+          this.autoPosition = v;
         }
       },
       immediate: true,
@@ -866,7 +893,7 @@ export default {
 .content {
   flex: 1;
   overflow: hidden;
-  background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC')
+  background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQAQMAAAAlPW0iAAAAA3NCSVQICAjb4U/gAAAABlBMVEXMzMz////TjRV2AAAACXBIWXMAAArrAAAK6wGCiw1aAAAAHHRFWHRTb2Z0d2FyZQBBZG9iZSBGaXJld29ya3MgQ1M26LyyjAAAABFJREFUCJlj+M/AgBVhF/0PAH6/D/HkDxOGAAAAAElFTkSuQmCC")
     left top repeat;
 }
 </style>
