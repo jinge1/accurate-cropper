@@ -1,0 +1,19 @@
+{
+  "name": "accurate-cropper",
+  "version": "1.0.0",
+  "description": "vue精确裁剪组件",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jinge1/accurate-cropper.git"
+  },
+  "author": "346959251@qq.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jinge1/accurate-cropper/issues"
+  },
+  "homepage": "https://github.com/jinge1/accurate-cropper#readme"
+}
